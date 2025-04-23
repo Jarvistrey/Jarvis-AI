@@ -1,5 +1,4 @@
 {
-    "openai_api_key": "",
-    "llama_model_path": ""
-  }
-  
+    "openai_api_key": "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",
+    "llama_model_path": "llama-2-7b-chat"
+}

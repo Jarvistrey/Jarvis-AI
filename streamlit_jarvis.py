@@ -37,50 +37,41 @@ if "config" not in st.session_state:
     st.session_state.config = get_config()
 if "voice_output" not in st.session_state:
     st.session_state.voice_output = False
+if "text_input" not in st.session_state:
+    st.session_state.text_input = ""
 
 # Process user input
 def process_user_input(user_input):
-    # Add user message to both histories
     user_message = {"role": "user", "content": user_input}
     st.session_state.openai_messages.append(user_message)
     st.session_state.llama_messages.append(user_message)
     
-    # Get response from active model
     active_model = st.session_state.active_model.lower()
-    
-    if active_model == "openai":
-        try:
-            chat_history = st.session_state.openai_messages
-            response = chat(user_input, "openai", chat_history)
-        except Exception as e:
-            response = f"Error getting OpenAI response: {str(e)}"
-    else:  # Llama
-        try:
+    try:
+        if active_model == "openai":
+            response = chat(user_input, "openai", st.session_state.openai_messages)
+        else:
             response = chat(user_input, "llama")
-        except Exception as e:
-            response = f"Error getting Llama response: {str(e)}"
+    except Exception as e:
+        response = f"Error getting response: {str(e)}"
     
-    # Add response to the appropriate chat history
+    assistant_message = {"role": "assistant", "content": response}
     if active_model == "openai":
-        st.session_state.openai_messages.append({"role": "assistant", "content": response})
+        st.session_state.openai_messages.append(assistant_message)
         st.session_state.llama_messages.append({"role": "assistant", "content": "[OpenAI was used]"})
     else:
-        st.session_state.llama_messages.append({"role": "assistant", "content": response})
+        st.session_state.llama_messages.append(assistant_message)
         st.session_state.openai_messages.append({"role": "assistant", "content": "[Llama was used]"})
-    
-    # Voice output if enabled
+
     if st.session_state.voice_output:
         text_to_speech(response)
-    
-    return response
 
-# Voice input function
+# Voice input
 def handle_voice_input():
     try:
         st.session_state.listening = True
         user_input = recognize_speech()
         st.session_state.listening = False
-        
         if user_input:
             process_user_input(user_input)
             st.experimental_rerun()
@@ -90,112 +81,68 @@ def handle_voice_input():
 
 # Main app
 def main():
-    # Title and description
     st.title("Jarvis AI Assistant")
     st.subheader("Your dual-model AI assistant with OpenAI and Llama")
-    
+
     # Sidebar
     with st.sidebar:
         st.title("Controls")
-        
-        # Model selection
         st.subheader("Model Selection")
-        model_choice = st.radio(
-            "Choose AI Model:",
-            ("OpenAI", "Llama"),
-            index=0 if st.session_state.active_model == "OpenAI" else 1
-        )
-        
+        model_choice = st.radio("Choose AI Model:", ("OpenAI", "Llama"),
+                                index=0 if st.session_state.active_model == "OpenAI" else 1)
         if model_choice != st.session_state.active_model:
             st.session_state.active_model = model_choice
             st.success(f"Switched to {model_choice} model")
-        
-        # Voice output toggle
+
         st.subheader("Voice Settings")
         voice_output = st.checkbox("Enable Voice Output", value=st.session_state.voice_output)
         if voice_output != st.session_state.voice_output:
             st.session_state.voice_output = voice_output
-        
-        # Settings
+
         st.subheader("Configuration")
         with st.expander("API Settings"):
-            openai_api_key = st.text_input(
-                "OpenAI API Key", 
-                value=st.session_state.config.get("openai_api_key", ""),
-                type="password"
-            )
-            
-            llama_model_path = st.text_input(
-                "Llama Model Path",
-                value=st.session_state.config.get("llama_model_path", "")
-            )
-            
+            openai_api_key = st.text_input("OpenAI API Key", value=st.session_state.config.get("openai_api_key", ""), type="password")
+            llama_model_path = st.text_input("Llama Model Path", value=st.session_state.config.get("llama_model_path", ""))
             if st.button("Save Settings"):
-                new_config = {**st.session_state.config}
+                new_config = st.session_state.config.copy()
                 new_config["openai_api_key"] = openai_api_key
                 new_config["llama_model_path"] = llama_model_path
-                
                 if save_config(new_config):
                     st.session_state.config = new_config
                     st.success("Settings saved successfully!")
-        
-        # Clear chat button
+
         if st.button("Clear Chat History"):
             st.session_state.openai_messages = []
             st.session_state.llama_messages = []
             st.success("Chat history cleared")
-    
-    # Main chat interface with side-by-side display
+
+    # Dual chat columns
     col1, col2 = st.columns(2)
-    
-    # OpenAI Chat Column
     with col1:
         st.header("OpenAI Chat")
-        
-        chat_container = st.container()
-        with chat_container:
-            for message in st.session_state.openai_messages:
-                role = message["role"]
-                content = message["content"]
-                
-                if role == "user":
-                    st.markdown(f"**You:** {content}")
-                else:
-                    st.markdown(f"**Jarvis:** {content}")
-    
-    # Llama Chat Column
+        for message in st.session_state.openai_messages:
+            st.markdown(f"**{'You' if message['role'] == 'user' else 'Jarvis'}:** {message['content']}")
     with col2:
         st.header("Llama Chat")
-        
-        chat_container = st.container()
-        with chat_container:
-            for message in st.session_state.llama_messages:
-                role = message["role"]
-                content = message["content"]
-                
-                if role == "user":
-                    st.markdown(f"**You:** {content}")
-                else:
-                    st.markdown(f"**Jarvis:** {content}")
-    
-    # Input section
+        for message in st.session_state.llama_messages:
+            st.markdown(f"**{'You' if message['role'] == 'user' else 'Jarvis'}:** {message['content']}")
+
     st.write("---")
     st.info(f"Active Model: {st.session_state.active_model}")
-    
+
+    # Input + Voice
+    def submit_and_clear():
+        if st.session_state.text_input:
+            process_user_input(st.session_state.text_input)
+            st.session_state.text_input = ""
+            st.rerun()
+
     col1, col2 = st.columns([7, 1])
-    
     with col1:
-        user_input = st.text_input("Message Jarvis:", key="text_input")
-    
+        st.text_input("Message Jarvis:", key="text_input", on_change=submit_and_clear)
     with col2:
-        voice_button = st.button("🎤 Voice")
-        if voice_button:
+        if st.button("🎤 Voice"):
             handle_voice_input()
-    
-    if user_input:
-        process_user_input(user_input)
-        st.session_state.text_input = ""
-        st.experimental_rerun()
 
 if __name__ == "__main__":
     main()
