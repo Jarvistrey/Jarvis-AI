@@ -10,21 +10,21 @@ def text_to_speech(text):
     engine.say(text)
     engine.runAndWait()
 
-def listen_for_command():
+def recognize_speech():
     """Listen for a voice command and return it as text."""
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:
-        print("Listening...")
+        print("🎙️ Listening...")
         recognizer.adjust_for_ambient_noise(source)
         audio = recognizer.listen(source)
 
     try:
         command = recognizer.recognize_google(audio)
-        print(f"User said: {command}")
+        print(f"🗣️ You said: {command}")
         return command
     except sr.UnknownValueError:
         text_to_speech("Sorry, I didn't catch that.")
         return ""
     except sr.RequestError:
-        text_to_speech("Sorry, I am having trouble connecting to the speech service.")
+        text_to_speech("Speech recognition service is currently unavailable.")
         return ""
